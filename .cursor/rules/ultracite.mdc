@@ -1,0 +1,33 @@
+---
+description: Ultracite AI-ready formatter and linter rules for this project
+globs: ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"]
+alwaysApply: true
+---
+
+# Ultracite Rules
+
+This project uses [Ultracite](https://ultracite.dev) for linting and formatting via Biome.
+
+## Key Principles
+
+- **No unused imports** — remove them or the linter will flag them
+- **Consistent quotes** — use double quotes for JSX attributes, single quotes for JS strings
+- **Explicit return types** on exported functions are preferred
+- **No `any`** — use `unknown` and narrow, or define proper types
+- **Tailwind class order** — use the Biome formatter to auto-sort
+- **No console.log in production** — use structured logging or remove before committing
+
+## Import Order
+
+1. Node built-ins
+2. External packages (react, next, etc.)
+3. Internal aliases (`@/...`)
+4. Relative imports
+
+## Naming Conventions
+
+- Components: `PascalCase`
+- Hooks: `camelCase` prefixed with `use`
+- Utilities: `camelCase`
+- Constants: `SCREAMING_SNAKE_CASE` or `camelCase` for module-level
+- Types/Interfaces: `PascalCase`
