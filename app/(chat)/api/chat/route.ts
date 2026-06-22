@@ -1,14 +1,17 @@
 import { geolocation, ipAddress } from "@vercel/functions";
-import type { UIMessageStreamWriter } from "ai";
 import {
-  appendResponseMessages,
+  convertToModelMessages,
   createUIMessageStream,
-  smoothStream,
+  createUIMessageStreamResponse,
+  generateId,
+  stepCountIs,
   streamText,
 } from "ai";
+import { after } from "next/server";
+import { createResumableStreamContext } from "resumable-stream";
 import { auth } from "@/app/(auth)/auth";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
-import { chatModels, allowedModelIds } from "@/lib/ai/models";
+import { chatModels, allowedModelIds, DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
 import { createDocument } from "@/lib/ai/tools/create-document";
@@ -22,9 +25,11 @@ import {
   getChatById,
   getDifyConversationIdByChatId,
   getMessageCountByUserId,
+  getMessagesByChatId,
   saveChat,
   saveMessages,
   updateChatDifyConversationId,
+  updateChatTitleById,
 } from "@/lib/db/queries";
 import { isDifyConfigured, callDifyChat } from "@/lib/dify-client";
 import { getOrCreateDifyUserId } from "@/lib/dify-identity";
@@ -32,222 +37,293 @@ import { transformDifyStreamToAISDK } from "@/lib/dify-stream";
 import { ChatbotError } from "@/lib/errors";
 import { checkIpRateLimit } from "@/lib/ratelimit";
 import type { ChatMessage } from "@/lib/types";
-import { generateUUID, getTextFromMessage } from "@/lib/utils";
-import { generateTitleFromUserMessage, postRequestBodySchema } from "./schema";
-import { ResumableStreamContext } from "resumable-stream";
-import { after } from "next/server";
+import { convertToUIMessages, generateUUID } from "@/lib/utils";
+import { generateTitleFromUserMessage } from "../../actions";
+import { type PostRequestBody, postRequestBodySchema } from "./schema";
 
 export const maxDuration = 60;
 
-let globalStreamContext: ResumableStreamContext | null = null;
-
 function getStreamContext() {
-  if (!globalStreamContext) {
-    try {
-      globalStreamContext = new ResumableStreamContext({
-        waitUntil: after,
-      });
-    } catch {
-      // resumable streams not available in this environment
-    }
+  try {
+    return createResumableStreamContext({ waitUntil: after });
+  } catch (_) {
+    return null;
   }
-  return globalStreamContext;
 }
 
+export { getStreamContext };
+
 export async function POST(request: Request) {
-  let requestBody: unknown;
+  let requestBody: PostRequestBody;
+
   try {
-    requestBody = await request.json();
-  } catch {
+    const json = await request.json();
+    requestBody = postRequestBodySchema.parse(json);
+  } catch (_) {
     return new ChatbotError("bad_request:api").toResponse();
   }
 
-  const parseResult = postRequestBodySchema.safeParse(requestBody);
-  if (!parseResult.success) {
-    return new ChatbotError("bad_request:api").toResponse();
-  }
+  try {
+    const { id, message, messages, selectedChatModel, selectedVisibilityType } =
+      requestBody;
 
-  const body = parseResult.data;
-  const { id, selectedChatModel, selectedVisibilityType } = body;
-
-  // Get last user message from either message or messages array
-  const userMessage = body.message ??
-    body.messages?.findLast((m: any) => m.role === "user");
-
-  if (!userMessage) {
-    return new ChatbotError("bad_request:api").toResponse();
-  }
-
-  const session = await auth();
-  if (!session?.user) {
-    return new ChatbotError("unauthorized:chat").toResponse();
-  }
-
-  const userType = session.user.type;
-  const { maxMessagesPerHour } = entitlementsByUserType[userType];
-
-  const ip = ipAddress(request);
-  await checkIpRateLimit(ip);
-
-  const messageCount = await getMessageCountByUserId({
-    id: session.user.id,
-    differenceInHours: 1,
-  });
-
-  if (messageCount >= maxMessagesPerHour) {
-    return new ChatbotError("rate_limit:chat").toResponse();
-  }
-
-  // Validate model
-  if (!allowedModelIds.has(selectedChatModel)) {
-    return new ChatbotError("bad_request:api").toResponse();
-  }
-
-  // Save or verify chat
-  const chat = await getChatById({ id });
-  if (!chat) {
-    const title = await generateTitleFromUserMessage({
-      message: getTextFromMessage(userMessage),
-    });
-    await saveChat({
-      id,
-      userId: session.user.id,
-      title,
-      visibility: selectedVisibilityType,
-    });
-  } else if (chat.userId !== session.user.id) {
-    return new ChatbotError("forbidden:chat").toResponse();
-  }
-
-  // Save user message
-  await saveMessages({
-    messages: [{
-      id: userMessage.id ?? generateUUID(),
-      chatId: id,
-      role: "user",
-      parts: userMessage.parts,
-      attachments: (userMessage as any).attachments ?? [],
-      createdAt: new Date(),
-    }],
-  });
-
-  // ── Dify path ────────────────────────────────────────────────────────────────
-  if (isDifyConfigured()) {
-    const difyUserId = await getOrCreateDifyUserId();
-    const conversationId = await getDifyConversationIdByChatId(id);
-    const query = getTextFromMessage(userMessage);
-
-    const difyResponse = await callDifyChat({ query, userId: difyUserId, conversationId });
-
-    if (!difyResponse.ok) {
-      return new ChatbotError("bad_request:chat").toResponse();
+    const session = await auth();
+    if (!session?.user) {
+      return new ChatbotError("unauthorized:chat").toResponse();
     }
 
-    const stream = transformDifyStreamToAISDK(difyResponse.body, {
-      onConversationId: (convId) => {
-        updateChatDifyConversationId({ chatId: id, difyConversationId: convId }).catch(() => {});
-      },
+    const chatModel = allowedModelIds.has(selectedChatModel)
+      ? selectedChatModel
+      : DEFAULT_CHAT_MODEL;
+
+    await checkIpRateLimit(ipAddress(request));
+
+    const userType = session.user.type;
+    const messageCount = await getMessageCountByUserId({
+      id: session.user.id,
+      differenceInHours: 1,
     });
 
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "X-Vercel-AI-Data-Stream": "v1",
-      },
-    });
-  }
+    if (messageCount > entitlementsByUserType[userType].maxMessagesPerHour) {
+      return new ChatbotError("rate_limit:chat").toResponse();
+    }
 
-  // ── AI SDK path ──────────────────────────────────────────────────────────────
-  const geo = geolocation(request);
-  const model = chatModels.find((m) => m.id === selectedChatModel);
+    const isToolApprovalFlow = Boolean(messages);
 
-  const streamId = generateUUID();
-  await createStreamId({ streamId, chatId: id });
+    const chat = await getChatById({ id });
+    let messagesFromDb: Awaited<ReturnType<typeof getMessagesByChatId>> = [];
+    let titlePromise: Promise<string> | null = null;
 
-  const stream = createUIMessageStream({
-    execute: async (writer: UIMessageStreamWriter<ChatMessage>) => {
-      const result = streamText({
-        model: getLanguageModel(selectedChatModel),
-        system: systemPrompt({
-          requestHints: {
-            latitude: geo.latitude,
-            longitude: geo.longitude,
-            city: geo.city,
-            country: geo.country,
-          },
-          supportsTools: true,
-        }),
-        messages: body.messages ?? [userMessage],
-        maxSteps: 5,
-        experimental_transform: smoothStream({ chunking: "word" }),
-        experimental_generateMessageId: generateUUID,
-        tools: {
-          getWeather,
-          createDocument: createDocument({ session, dataStream: writer, modelId: selectedChatModel }),
-          editDocument: editDocument({ session, dataStream: writer }),
-          updateDocument: updateDocument({ session, dataStream: writer, modelId: selectedChatModel }),
-          requestSuggestions: requestSuggestions({ session, dataStream: writer, modelId: selectedChatModel }),
-        },
-        onFinish: async ({ response }) => {
-          try {
-            const assistantMessages = appendResponseMessages({
-              messages: [userMessage] as any[],
-              responseMessages: response.messages,
-            });
+    if (chat) {
+      if (chat.userId !== session.user.id) {
+        return new ChatbotError("forbidden:chat").toResponse();
+      }
+      messagesFromDb = await getMessagesByChatId({ id });
+    } else if (message?.role === "user") {
+      await saveChat({
+        id,
+        userId: session.user.id,
+        title: "New chat",
+        visibility: selectedVisibilityType,
+      });
+      const msgText =
+        message.parts
+          ?.filter((p: { type: string }) => p.type === "text")
+          .map((p: { text: string }) => p.text)
+          .join(" ") ?? "";
+      titlePromise = generateTitleFromUserMessage({ message: msgText });
+    }
 
-            await saveMessages({
-              messages: assistantMessages
-                .filter((m) => m.role === "assistant")
-                .map((m) => ({
-                  id: m.id ?? generateUUID(),
-                  chatId: id,
-                  role: "assistant",
-                  parts: (m as any).parts ?? [],
-                  attachments: [],
-                  createdAt: new Date(),
-                })),
-            });
-          } catch (error) {
-            console.error("Failed to save assistant messages:", error);
+    let uiMessages: ChatMessage[];
+
+    if (isToolApprovalFlow && messages) {
+      const dbMessages = convertToUIMessages(messagesFromDb);
+      const approvalStates = new Map(
+        messages.flatMap(
+          (m) =>
+            m.parts
+              ?.filter(
+                (p: Record<string, unknown>) =>
+                  p.state === "approval-responded" ||
+                  p.state === "output-denied"
+              )
+              .map((p: Record<string, unknown>) => [
+                String(p.toolCallId ?? ""),
+                p,
+              ]) ?? []
+        )
+      );
+      uiMessages = dbMessages.map((msg) => ({
+        ...msg,
+        parts: msg.parts.map((part) => {
+          if (
+            "toolCallId" in part &&
+            approvalStates.has(String(part.toolCallId))
+          ) {
+            return { ...part, ...(approvalStates.get(String(part.toolCallId)) as object) };
           }
+          return part;
+        }),
+      })) as ChatMessage[];
+    } else {
+      uiMessages = [
+        ...convertToUIMessages(messagesFromDb),
+        message as ChatMessage,
+      ];
+    }
+
+    if (message?.role === "user") {
+      await saveMessages({
+        messages: [
+          {
+            chatId: id,
+            id: message.id,
+            role: "user",
+            parts: message.parts,
+            attachments: [],
+            createdAt: new Date(),
+          },
+        ],
+      });
+    }
+
+    // ── Dify path ──────────────────────────────────────────────────────────────
+    if (isDifyConfigured()) {
+      const difyUserId = await getOrCreateDifyUserId();
+      const conversationId = await getDifyConversationIdByChatId(id);
+      const msgText =
+        (message ?? messages?.findLast((m: { role: string }) => m.role === "user"))
+          ?.parts
+          ?.filter((p: { type: string }) => p.type === "text")
+          .map((p: { text: string }) => p.text)
+          .join(" ") ?? "";
+
+      const difyResponse = await callDifyChat({
+        query: msgText,
+        userId: difyUserId,
+        conversationId,
+      });
+
+      if (!difyResponse.ok) {
+        return new ChatbotError("bad_request:chat").toResponse();
+      }
+
+      const stream = transformDifyStreamToAISDK(difyResponse.body, {
+        onConversationId: (convId) => {
+          updateChatDifyConversationId({
+            chatId: id,
+            difyConversationId: convId,
+          }).catch(() => {});
         },
       });
 
-      result.consumeStream();
-
-      writer.merge(
-        result.toUIMessageStream({
-          sendReasoning: true,
-        })
-      );
-    },
-    generateId: generateUUID,
-    onError: (error) => {
-      console.error("Stream error:", error);
-      return error instanceof Error ? error.message : "Unknown error";
-    },
-  });
-
-  const streamContext = getStreamContext();
-
-  if (streamContext) {
-    return new Response(
-      await streamContext.resumableStream(streamId, () => stream),
-      {
+      return new Response(stream, {
         headers: {
           "Content-Type": "text/plain; charset=utf-8",
           "X-Vercel-AI-Data-Stream": "v1",
         },
-      }
-    );
-  }
+      });
+    }
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "X-Vercel-AI-Data-Stream": "v1",
-    },
-  });
+    // ── AI SDK path ────────────────────────────────────────────────────────────
+    const { longitude, latitude, city, country } = geolocation(request);
+
+    const modelMessages = await convertToModelMessages(uiMessages);
+
+    const stream = createUIMessageStream({
+      originalMessages: isToolApprovalFlow ? uiMessages : undefined,
+      execute: async ({ writer: dataStream }) => {
+        const result = streamText({
+          model: getLanguageModel(chatModel),
+          system: systemPrompt({
+            requestHints: { longitude, latitude, city, country },
+            supportsTools: true,
+          }),
+          messages: modelMessages,
+          stopWhen: stepCountIs(5),
+          tools: {
+            getWeather,
+            createDocument: createDocument({
+              session,
+              dataStream,
+              modelId: chatModel,
+            }),
+            editDocument: editDocument({ dataStream, session }),
+            updateDocument: updateDocument({
+              session,
+              dataStream,
+              modelId: chatModel,
+            }),
+            requestSuggestions: requestSuggestions({
+              session,
+              dataStream,
+              modelId: chatModel,
+            }),
+          },
+        });
+
+        dataStream.merge(result.toUIMessageStream({ sendReasoning: true }));
+
+        if (titlePromise) {
+          try {
+            const title = await titlePromise;
+            dataStream.write({ type: "data-chat-title", data: title });
+            updateChatTitleById({ chatId: id, title });
+          } catch (_) {
+            /* non-fatal */
+          }
+        }
+      },
+      generateId: generateUUID,
+      onFinish: async ({ messages: finishedMessages }) => {
+        if (isToolApprovalFlow) {
+          for (const finishedMsg of finishedMessages) {
+            const existing = uiMessages.find((m) => m.id === finishedMsg.id);
+            if (!existing) {
+              await saveMessages({
+                messages: [
+                  {
+                    id: finishedMsg.id,
+                    role: finishedMsg.role,
+                    parts: finishedMsg.parts,
+                    createdAt: new Date(),
+                    attachments: [],
+                    chatId: id,
+                  },
+                ],
+              });
+            }
+          }
+        } else if (finishedMessages.length > 0) {
+          await saveMessages({
+            messages: finishedMessages.map((m) => ({
+              id: m.id,
+              role: m.role,
+              parts: m.parts,
+              createdAt: new Date(),
+              attachments: [],
+              chatId: id,
+            })),
+          });
+        }
+      },
+      onError: (error) => {
+        if (
+          error instanceof Error &&
+          error.message?.includes("AI Gateway requires a valid credit card")
+        ) {
+          return "AI Gateway requires a valid credit card on file to service requests.";
+        }
+        return "Oops, an error occurred!";
+      },
+    });
+
+    return createUIMessageStreamResponse({
+      stream,
+      async consumeSseStream({ stream: sseStream }) {
+        if (!process.env.REDIS_URL) return;
+        try {
+          const streamContext = getStreamContext();
+          if (streamContext) {
+            const streamId = generateId();
+            await createStreamId({ streamId, chatId: id });
+            await streamContext.createNewResumableStream(
+              streamId,
+              () => sseStream
+            );
+          }
+        } catch (_) {
+          /* non-critical */
+        }
+      },
+    });
+  } catch (error) {
+    if (error instanceof ChatbotError) {
+      return error.toResponse();
+    }
+    console.error("Unhandled error in chat API:", error);
+    return new ChatbotError("offline:chat").toResponse();
+  }
 }
 
 export async function DELETE(request: Request) {
@@ -261,23 +337,15 @@ export async function DELETE(request: Request) {
   const session = await auth();
 
   if (!session?.user) {
-    return new ChatbotError("unauthorized:auth").toResponse();
+    return new ChatbotError("unauthorized:chat").toResponse();
   }
 
-  try {
-    const chat = await getChatById({ id });
+  const chat = await getChatById({ id });
 
-    if (!chat) {
-      return new ChatbotError("not_found:chat").toResponse();
-    }
-
-    if (chat.userId !== session.user.id) {
-      return new ChatbotError("forbidden:chat").toResponse();
-    }
-
-    await deleteChatById({ id });
-    return Response.json({ success: true });
-  } catch (_error) {
-    return new ChatbotError("bad_request:api").toResponse();
+  if (chat?.userId !== session.user.id) {
+    return new ChatbotError("forbidden:chat").toResponse();
   }
+
+  const deletedChat = await deleteChatById({ id });
+  return Response.json(deletedChat, { status: 200 });
 }

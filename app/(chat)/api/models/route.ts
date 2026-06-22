@@ -1,7 +1,5 @@
 import { getAllGatewayModels, getCapabilities, chatModels } from "@/lib/ai/models";
 
-export const revalidate = 86400; // 24 hours
-
 export async function GET() {
   try {
     const capabilities = await getCapabilities();

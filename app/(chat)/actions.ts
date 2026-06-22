@@ -11,7 +11,6 @@ import {
   updateChatVisibilityById,
 } from "@/lib/db/queries";
 import type { VisibilityType } from "@/components/chat/visibility-selector";
-import { generateTitleFromUserMessage } from "@/app/(chat)/api/chat/schema";
 
 export async function saveChatModelAsCookie(model: string) {
   const cookieStore = await cookies();
