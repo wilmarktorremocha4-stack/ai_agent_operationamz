@@ -238,6 +238,9 @@ export async function POST(request: Request) {
           if (capturedDifyConvId && capturedDifyConvId !== difyConversationId) {
             updateChatDifyConversationId({ chatId: id, difyConversationId: capturedDifyConvId });
           }
+        } else if (chatModel === "dify") {
+          // Dify model selected but not configured — surface a clear error
+          throw new Error("Dify is not configured. Set DIFY_API_BASE_URL and DIFY_APP_API_KEY in environment variables.");
         } else {
           // ── AI SDK (fallback) path ─────────────────────────────────
           const result = streamText({
