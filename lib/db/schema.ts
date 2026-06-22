@@ -3,7 +3,7 @@ import {
   boolean,
   foreignKey,
   json,
-  pgSchema,
+  pgTable,
   primaryKey,
   text,
   timestamp,
@@ -11,9 +11,7 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
-const chatSchema = pgSchema("chat");
-
-export const user = chatSchema.table("User", {
+export const user = pgTable("User", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),
   email: varchar("email", { length: 64 }).notNull(),
   password: varchar("password", { length: 64 }),
@@ -27,7 +25,7 @@ export const user = chatSchema.table("User", {
 
 export type User = InferSelectModel<typeof user>;
 
-export const chat = chatSchema.table("Chat", {
+export const chat = pgTable("Chat", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),
   createdAt: timestamp("createdAt").notNull(),
   title: text("title").notNull(),
@@ -42,7 +40,7 @@ export const chat = chatSchema.table("Chat", {
 
 export type Chat = InferSelectModel<typeof chat>;
 
-export const message = chatSchema.table("Message_v2", {
+export const message = pgTable("Message_v2", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),
   chatId: uuid("chatId")
     .notNull()
@@ -55,7 +53,7 @@ export const message = chatSchema.table("Message_v2", {
 
 export type DBMessage = InferSelectModel<typeof message>;
 
-export const vote = chatSchema.table(
+export const vote = pgTable(
   "Vote_v2",
   {
     chatId: uuid("chatId")
@@ -73,7 +71,7 @@ export const vote = chatSchema.table(
 
 export type Vote = InferSelectModel<typeof vote>;
 
-export const document = chatSchema.table(
+export const document = pgTable(
   "Document",
   {
     id: uuid("id").notNull().defaultRandom(),
@@ -94,7 +92,7 @@ export const document = chatSchema.table(
 
 export type Document = InferSelectModel<typeof document>;
 
-export const suggestion = chatSchema.table(
+export const suggestion = pgTable(
   "Suggestion",
   {
     id: uuid("id").notNull().defaultRandom(),
@@ -120,7 +118,7 @@ export const suggestion = chatSchema.table(
 
 export type Suggestion = InferSelectModel<typeof suggestion>;
 
-export const stream = chatSchema.table(
+export const stream = pgTable(
   "Stream",
   {
     id: uuid("id").notNull().defaultRandom(),
@@ -138,7 +136,7 @@ export const stream = chatSchema.table(
 
 export type Stream = InferSelectModel<typeof stream>;
 
-export const navigatorConversation = chatSchema.table("NavigatorConversation", {
+export const navigatorConversation = pgTable("NavigatorConversation", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),
   difyConversationId: text("difyConversationId").notNull().unique(),
   difyUserId: text("difyUserId").notNull(),
