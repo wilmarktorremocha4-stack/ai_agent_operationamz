@@ -56,7 +56,7 @@ export async function callDifyChat({
   conversationId?: string | null;
 }): Promise<Response> {
   const baseUrl = process.env.DIFY_API_BASE_URL;
-  const apiKey = process.env.DIFY_APP_API_KEY;
+  const apiKey = process.env.DIFY_APP_API_KEY ?? process.env.NEXT_PUBLIC_APP_KEY;
 
   if (!baseUrl || !apiKey) {
     throw new Error('Dify is not configured. Set DIFY_API_BASE_URL and DIFY_APP_API_KEY.');
@@ -80,6 +80,7 @@ export async function callDifyChat({
 
 export function isDifyConfigured(): boolean {
   return Boolean(
-    process.env.DIFY_API_BASE_URL && process.env.DIFY_APP_API_KEY
+    process.env.DIFY_API_BASE_URL &&
+    (process.env.DIFY_APP_API_KEY ?? process.env.NEXT_PUBLIC_APP_KEY)
   );
 }

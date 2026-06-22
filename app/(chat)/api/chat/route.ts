@@ -396,6 +396,40 @@ export async function POST(request: Request) {
   }
 }
 
+export async function PATCH(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get("id");
+
+  if (!id) {
+    return new ChatbotError("bad_request:api").toResponse();
+  }
+
+  const session = await auth();
+  if (!session?.user) {
+    return new ChatbotError("unauthorized:chat").toResponse();
+  }
+
+  const chat = await getChatById({ id });
+  if (chat?.userId !== session.user.id) {
+    return new ChatbotError("forbidden:chat").toResponse();
+  }
+
+  let title: string;
+  try {
+    const body = await request.json();
+    title = String(body.title ?? "").trim();
+  } catch {
+    return new ChatbotError("bad_request:api").toResponse();
+  }
+
+  if (!title) {
+    return new ChatbotError("bad_request:api").toResponse();
+  }
+
+  await updateChatTitleById({ chatId: id, title });
+  return Response.json({ success: true }, { status: 200 });
+}
+
 export async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
