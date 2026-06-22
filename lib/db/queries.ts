@@ -24,6 +24,8 @@ import {
   type DBMessage,
   document,
   message,
+  navigatorConversation,
+  type NavigatorConversation,
   type Suggestion,
   stream,
   suggestion,
@@ -628,5 +630,33 @@ export async function getStreamIdsByChatId({ chatId }: { chatId: string }) {
       "bad_request:database",
       "Failed to get stream ids by chat id"
     );
+  }
+}
+
+export async function getDifyConversationIdByChatId(chatId: string): Promise<string | null> {
+  try {
+    const result = await db.select({ difyConversationId: chat.difyConversationId })
+      .from(chat)
+      .where(eq(chat.id, chatId))
+      .limit(1);
+    return result[0]?.difyConversationId ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function updateChatDifyConversationId({
+  chatId,
+  difyConversationId,
+}: {
+  chatId: string;
+  difyConversationId: string;
+}) {
+  try {
+    await db.update(chat)
+      .set({ difyConversationId })
+      .where(eq(chat.id, chatId));
+  } catch {
+    // non-fatal
   }
 }

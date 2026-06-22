@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -7,29 +7,41 @@ import "./globals.css";
 import { SessionProvider } from "next-auth/react";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://chat.vercel.ai"),
-  title: "Next.js Chatbot Template",
-  description: "Next.js chatbot template using the AI SDK.",
+  metadataBase: new URL("https://navigator.operationamz.com"),
+  title: "AMZ Navigator",
+  description:
+    "AI-powered Amazon seller assistant by OperationAMZ. Get expert guidance on product research, listings, PPC, and more.",
+  openGraph: {
+    title: "AMZ Navigator",
+    description:
+      "AI-powered Amazon seller assistant by OperationAMZ.",
+    images: [
+      "https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a380e1e1c5d711b35ce5f63.png",
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "AMZ Navigator",
+    description: "AI-powered Amazon seller assistant by OperationAMZ.",
+    images: [
+      "https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a380e1e1c5d711b35ce5f63.png",
+    ],
+  },
 };
 
 export const viewport = {
   maximumScale: 1,
 };
 
-const geist = Geist({
+const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-geist",
+  variable: "--font-plus-jakarta",
+  weight: ["400", "500", "600", "700", "800"],
 });
 
-const geistMono = Geist_Mono({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-geist-mono",
-});
-
-const LIGHT_THEME_COLOR = "hsl(0 0% 100%)";
-const DARK_THEME_COLOR = "hsl(240deg 10% 3.92%)";
+const DARK_THEME_COLOR = "#030A18";
+const LIGHT_THEME_COLOR = "#ffffff";
 const THEME_COLOR_SCRIPT = `\
 (function() {
   var html = document.documentElement;
@@ -55,7 +67,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      className={`${geist.variable} ${geistMono.variable}`}
+      className={plusJakartaSans.variable}
       lang="en"
       suppressHydrationWarning
     >
@@ -66,13 +78,14 @@ export default function RootLayout({
             __html: THEME_COLOR_SCRIPT,
           }}
         />
+        <link rel="icon" href="https://assets.cdn.filesafe.space/2rx7sGBL7YKaiP0HwK56/media/6a380e1e1c5d711b35ce5f63.png" type="image/png" />
       </head>
       <body className="antialiased">
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="dark"
           disableTransitionOnChange
-          enableSystem
+          enableSystem={false}
         >
           <SessionProvider
             basePath={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/auth`}

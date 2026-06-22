@@ -548,6 +548,9 @@ function PureMultimodalInput({
           )}
         </PromptInputFooter>
       </PromptInput>
+      <p className="mt-1.5 text-center text-[11px] text-muted-foreground/60 select-none">
+        AMZ Navigator is AI and can make mistakes. Please double-check important information.
+      </p>
     </div>
   );
 }

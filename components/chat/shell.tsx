@@ -81,6 +81,7 @@ export function ChatShell() {
           <ChatHeader
             chatId={chatId}
             isReadonly={isReadonly}
+            isThinking={status === "submitted" || status === "streaming"}
             selectedVisibilityType={visibilityType}
           />
 

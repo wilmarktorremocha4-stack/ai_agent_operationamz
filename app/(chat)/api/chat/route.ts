@@ -30,14 +30,18 @@ import {
   createStreamId,
   deleteChatById,
   getChatById,
+  getDifyConversationIdByChatId,
   getMessageCountByUserId,
   getMessagesByChatId,
   saveChat,
   saveMessages,
+  updateChatDifyConversationId,
   updateChatTitleById,
   updateMessage,
 } from "@/lib/db/queries";
 import type { DBMessage } from "@/lib/db/schema";
+import { callDifyChat, isDifyConfigured, parseDifySSE } from "@/lib/dify-client";
+import { getOrCreateDifyUserId } from "@/lib/dify-identity";
 import { ChatbotError } from "@/lib/errors";
 import { checkIpRateLimit } from "@/lib/ratelimit";
 import type { ChatMessage } from "@/lib/types";
@@ -180,68 +184,114 @@ export async function POST(request: Request) {
       });
     }
 
+    const useDify = isDifyConfigured();
+
     const modelConfig = chatModels.find((m) => m.id === chatModel);
-    const modelCapabilities = await getCapabilities();
-    const capabilities = modelCapabilities[chatModel];
+    const modelCapabilities = useDify ? {} : await getCapabilities();
+    const capabilities = useDify ? null : modelCapabilities[chatModel];
     const isReasoningModel = capabilities?.reasoning === true;
     const supportsTools = capabilities?.tools === true;
 
-    const modelMessages = await convertToModelMessages(uiMessages);
+    const modelMessages = useDify ? [] : await convertToModelMessages(uiMessages);
+
+    // For Dify: get the stable user ID and existing Dify conversation ID
+    const difyUserId = useDify ? await getOrCreateDifyUserId() : null;
+    const difyConversationId = useDify ? await getDifyConversationIdByChatId(id) : null;
 
     const stream = createUIMessageStream({
       originalMessages: isToolApprovalFlow ? uiMessages : undefined,
       execute: async ({ writer: dataStream }) => {
-        const result = streamText({
-          model: getLanguageModel(chatModel),
-          system: systemPrompt({ requestHints, supportsTools }),
-          messages: modelMessages,
-          stopWhen: stepCountIs(5),
-          experimental_activeTools:
-            isReasoningModel && !supportsTools
-              ? []
-              : [
-                  "getWeather",
-                  "createDocument",
-                  "editDocument",
-                  "updateDocument",
-                  "requestSuggestions",
-                ],
-          providerOptions: {
-            ...(modelConfig?.gatewayOrder && {
-              gateway: { order: modelConfig.gatewayOrder },
-            }),
-            ...(modelConfig?.reasoningEffort && {
-              openai: { reasoningEffort: modelConfig.reasoningEffort },
-            }),
-          },
-          tools: {
-            getWeather,
-            createDocument: createDocument({
-              session,
-              dataStream,
-              modelId: chatModel,
-            }),
-            editDocument: editDocument({ dataStream, session }),
-            updateDocument: updateDocument({
-              session,
-              dataStream,
-              modelId: chatModel,
-            }),
-            requestSuggestions: requestSuggestions({
-              session,
-              dataStream,
-              modelId: chatModel,
-            }),
-          },
-          experimental_telemetry: {
-            isEnabled: isProductionEnvironment,
-            functionId: "stream-text",
-          },
-        });
+        if (useDify && difyUserId) {
+          // ── Dify path ──────────────────────────────────────────────
+          const userQuery = message?.parts
+            ?.filter((p) => p.type === "text")
+            .map((p) => p.text)
+            .join("") ?? "";
 
-        dataStream.merge(
-          result.toUIMessageStream({ sendReasoning: isReasoningModel })
-        );
+          const difyRes = await callDifyChat({
+            query: userQuery,
+            userId: difyUserId,
+            conversationId: difyConversationId,
+          });
+
+          if (!difyRes.ok) {
+            const errText = await difyRes.text().catch(() => "unknown error");
+            throw new Error(`Dify API error ${difyRes.status}: ${errText}`);
+          }
+
+          const msgPartId = generateUUID();
+          dataStream.write({ type: "text-start", id: msgPartId });
+
+          let capturedDifyConvId: string | null = null;
+          for await (const chunk of parseDifySSE(difyRes.body)) {
+            if (chunk.event === "message" && chunk.answer) {
+              dataStream.write({ type: "text-delta", id: msgPartId, delta: chunk.answer });
+            }
+            if (!capturedDifyConvId && chunk.conversation_id) {
+              capturedDifyConvId = chunk.conversation_id;
+            }
+          }
+
+          dataStream.write({ type: "text-end", id: msgPartId });
+
+          // Persist the Dify conversation_id so the next message continues the same thread
+          if (capturedDifyConvId && capturedDifyConvId !== difyConversationId) {
+            updateChatDifyConversationId({ chatId: id, difyConversationId: capturedDifyConvId });
+          }
+        } else {
+          // ── AI SDK (fallback) path ─────────────────────────────────
+          const result = streamText({
+            model: getLanguageModel(chatModel),
+            system: systemPrompt({ requestHints, supportsTools }),
+            messages: modelMessages,
+            stopWhen: stepCountIs(5),
+            experimental_activeTools:
+              isReasoningModel && !supportsTools
+                ? []
+                : [
+                    "getWeather",
+                    "createDocument",
+                    "editDocument",
+                    "updateDocument",
+                    "requestSuggestions",
+                  ],
+            providerOptions: {
+              ...(modelConfig?.gatewayOrder && {
+                gateway: { order: modelConfig.gatewayOrder },
+              }),
+              ...(modelConfig?.reasoningEffort && {
+                openai: { reasoningEffort: modelConfig.reasoningEffort },
+              }),
+            },
+            tools: {
+              getWeather,
+              createDocument: createDocument({
+                session,
+                dataStream,
+                modelId: chatModel,
+              }),
+              editDocument: editDocument({ dataStream, session }),
+              updateDocument: updateDocument({
+                session,
+                dataStream,
+                modelId: chatModel,
+              }),
+              requestSuggestions: requestSuggestions({
+                session,
+                dataStream,
+                modelId: chatModel,
+              }),
+            },
+            experimental_telemetry: {
+              isEnabled: isProductionEnvironment,
+              functionId: "stream-text",
+            },
+          });
+
+          dataStream.merge(
+            result.toUIMessageStream({ sendReasoning: isReasoningModel })
+          );
+        }
 
         if (titlePromise) {
           try {

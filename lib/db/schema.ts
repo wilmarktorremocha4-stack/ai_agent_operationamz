@@ -35,6 +35,7 @@ export const chat = pgTable("Chat", {
   visibility: varchar("visibility", { enum: ["public", "private"] })
     .notNull()
     .default("private"),
+  difyConversationId: text("difyConversationId"),
 });
 
 export type Chat = InferSelectModel<typeof chat>;
@@ -116,6 +117,18 @@ export const suggestion = pgTable(
 );
 
 export type Suggestion = InferSelectModel<typeof suggestion>;
+
+export const navigatorConversation = pgTable("NavigatorConversation", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  difyConversationId: text("difyConversationId").unique(),
+  difyUserId: text("difyUserId").notNull(),
+  chatId: uuid("chatId").references(() => chat.id),
+  title: text("title"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+});
+
+export type NavigatorConversation = InferSelectModel<typeof navigatorConversation>;
 
 export const stream = pgTable(
   "Stream",

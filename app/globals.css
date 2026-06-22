@@ -48,13 +48,14 @@
 
 :root {
   --radius: 0.625rem;
+  /* Light theme — kept neutral, app defaults to dark */
   --background: oklch(0.985 0 0);
   --foreground: oklch(0.12 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.12 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.12 0 0);
-  --primary: oklch(0.12 0 0);
+  --primary: #0E90C8;
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.965 0 0);
   --secondary-foreground: oklch(0.38 0 0);
@@ -65,7 +66,7 @@
   --destructive: oklch(0.55 0.15 25);
   --border: oklch(0.9 0 0);
   --input: oklch(0.9 0 0);
-  --ring: oklch(0.5 0 0);
+  --ring: #0E90C8;
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -79,6 +80,10 @@
   --sidebar-accent-foreground: oklch(0.12 0 0);
   --sidebar-border: oklch(0.88 0 0);
   --sidebar-ring: oklch(0.5 0 0);
+  /* AMZ Navigator brand tokens */
+  --amz-navy: #030A18;
+  --amz-cyan: #0E90C8;
+  --amz-cyan-light: #1DBBEE;
 
   --shadow-card: 0 1px 3px oklch(0 0 0 / 0.05), 0 1px 1px oklch(0 0 0 / 0.03);
   --shadow-float:
@@ -95,37 +100,38 @@
 }
 
 .dark {
-  --background: oklch(0.195 0 0);
+  /* AMZ Navigator dark theme — navy base, cyan accents */
+  --background: #030A18;
   --foreground: oklch(0.94 0 0);
-  --card: oklch(0.225 0 0);
+  --card: #071022;
   --card-foreground: oklch(0.94 0 0);
-  --popover: oklch(0.225 0 0);
+  --popover: #071022;
   --popover-foreground: oklch(0.94 0 0);
-  --primary: oklch(0.94 0 0);
-  --primary-foreground: oklch(0.195 0 0);
-  --secondary: oklch(0.26 0 0);
+  --primary: #0E90C8;
+  --primary-foreground: #ffffff;
+  --secondary: #0d1a30;
   --secondary-foreground: oklch(0.75 0 0);
-  --muted: oklch(0.165 0 0);
+  --muted: #0a1525;
   --muted-foreground: oklch(0.6 0 0);
-  --accent: oklch(0.26 0 0);
+  --accent: #0d1a30;
   --accent-foreground: oklch(0.94 0 0);
   --destructive: oklch(0.7 0.15 25);
-  --border: oklch(0.27 0 0);
-  --input: oklch(0.27 0 0);
-  --ring: oklch(0.45 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
+  --border: #112040;
+  --input: #112040;
+  --ring: #0E90C8;
+  --chart-1: #0E90C8;
+  --chart-2: #1DBBEE;
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.175 0 0);
+  --sidebar: #020810;
   --sidebar-foreground: oklch(0.78 0 0);
-  --sidebar-primary: oklch(0.94 0 0);
-  --sidebar-primary-foreground: oklch(0.195 0 0);
-  --sidebar-accent: oklch(0.94 0 0 / 0.06);
+  --sidebar-primary: #0E90C8;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgba(14, 144, 200, 0.08);
   --sidebar-accent-foreground: oklch(0.94 0 0);
-  --sidebar-border: oklch(0.25 0 0);
-  --sidebar-ring: oklch(0.45 0 0);
+  --sidebar-border: #112040;
+  --sidebar-ring: #0E90C8;
 
   --shadow-card:
     inset 0 1px 0 oklch(1 0 0 / 0.04), 0 1px 2px oklch(0 0 0 / 0.2),
@@ -497,4 +503,18 @@ textarea:focus-visible {
 
 [data-testid="artifact"] {
   isolation: isolate;
+}
+
+/* AMZ Navigator avatar pulse animation */
+@keyframes navigator-pulse {
+  0%, 100% { transform: scale(0.95); opacity: 0.55; }
+  50%       { transform: scale(1.14); opacity: 1; }
+}
+.animate-navigator-pulse {
+  animation: navigator-pulse 2.4s ease-in-out infinite;
+}
+
+/* Font family */
+body {
+  font-family: var(--font-plus-jakarta), system-ui, sans-serif;
 }

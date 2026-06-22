@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  MessageSquareIcon,
   PanelLeftIcon,
   PenSquareIcon,
   TrashIcon,
@@ -13,6 +12,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
+import { NavigatorAvatar } from "@/components/navigator-avatar";
 import {
   getChatHistoryPaginationKey,
   SidebarHistory,
@@ -70,20 +70,19 @@ export function AppSidebar({ user }: { user: User | undefined }) {
         <SidebarHeader className="pb-0 pt-3">
           <SidebarMenu>
             <SidebarMenuItem className="flex flex-row items-center justify-between">
-              <div className="group/logo relative flex items-center justify-center">
-                <SidebarMenuButton
-                  asChild
-                  className="size-8 !px-0 items-center justify-center group-data-[collapsible=icon]:group-hover/logo:opacity-0"
-                  tooltip="Chatbot"
+              <div className="group/logo relative flex items-center gap-2">
+                <Link
+                  href="/"
+                  onClick={() => setOpenMobile(false)}
+                  className="flex items-center gap-2 group-data-[collapsible=icon]:hidden"
                 >
-                  <Link href="/" onClick={() => setOpenMobile(false)}>
-                    <MessageSquareIcon className="size-4 text-sidebar-foreground/50" />
-                  </Link>
-                </SidebarMenuButton>
+                  <NavigatorAvatar size={28} />
+                  <span className="font-bold text-sm text-sidebar-foreground">AMZ Navigator</span>
+                </Link>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <SidebarMenuButton
-                      className="pointer-events-none absolute inset-0 size-8 opacity-0 group-data-[collapsible=icon]:pointer-events-auto group-data-[collapsible=icon]:group-hover/logo:opacity-100"
+                      className="hidden group-data-[collapsible=icon]:flex items-center justify-center size-8 !px-0"
                       onClick={() => toggleSidebar()}
                     >
                       <PanelLeftIcon className="size-4" />
