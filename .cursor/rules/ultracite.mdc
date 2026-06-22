@@ -1,33 +1,21 @@
 ---
-description: Ultracite AI-ready formatter and linter rules for this project
-globs: ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"]
+description: Ultracite formatting and linting rules
 alwaysApply: true
 ---
 
 # Ultracite Rules
 
-This project uses [Ultracite](https://ultracite.dev) for linting and formatting via Biome.
+This project uses Ultracite for formatting and linting via Biome.
 
-## Key Principles
+## Key Rules
 
-- **No unused imports** — remove them or the linter will flag them
-- **Consistent quotes** — use double quotes for JSX attributes, single quotes for JS strings
-- **Explicit return types** on exported functions are preferred
-- **No `any`** — use `unknown` and narrow, or define proper types
-- **Tailwind class order** — use the Biome formatter to auto-sort
-- **No console.log in production** — use structured logging or remove before committing
-
-## Import Order
-
-1. Node built-ins
-2. External packages (react, next, etc.)
-3. Internal aliases (`@/...`)
-4. Relative imports
-
-## Naming Conventions
-
-- Components: `PascalCase`
-- Hooks: `camelCase` prefixed with `use`
-- Utilities: `camelCase`
-- Constants: `SCREAMING_SNAKE_CASE` or `camelCase` for module-level
-- Types/Interfaces: `PascalCase`
+- Use double quotes for strings in TSX/JSX files
+- Use single quotes for strings in TS files
+- No unused variables or imports
+- Prefer `const` over `let` where possible
+- Use TypeScript strict mode
+- No explicit `any` types
+- Organize imports alphabetically
+- No console.log in production code (use console.error/warn for errors)
+- Prefer named exports over default exports
+- Use `type` imports for type-only imports

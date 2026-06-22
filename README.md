@@ -1,53 +1,32 @@
 # AMZ Navigator
 
-An AI-powered Amazon seller assistant built with Next.js, Dify, and the Vercel AI SDK.
+AMZ Navigator is an AI-powered chatbot for Amazon sellers, built on the [Vercel AI Chatbot](https://github.com/vercel/ai-chatbot) template.
 
 ## Features
 
-- **Dify Backend Integration**: Routes all chat traffic through your Dify agent for Amazon seller expertise
-- **AI SDK Fallback**: Falls back to Vercel AI Gateway when Dify is not configured
-- **Multi-model Support**: DeepSeek V3.2, Kimi K2.5 (default), GPT OSS models, Grok 4.1 Fast
-- **File Export**: Export conversations as PDF, DOCX, or XLSX
-- **Artifacts**: Create and edit text, code, and spreadsheet documents
-- **Auth**: Guest and registered user authentication via NextAuth.js
-- **Rate Limiting**: IP-based rate limiting with Redis
+- **Dify Integration**: Routes chat traffic through your Dify agent when configured
+- **Multi-model support**: Switch between DeepSeek, Kimi, GPT, and Grok models
+- **File exports**: Export conversations as PDF, DOCX, or XLSX
+- **Artifact system**: Create and edit code, text, and spreadsheet artifacts
+- **Authentication**: Email/password and guest login via NextAuth
+- **Chat history**: Paginated sidebar with date grouping
 
-## Tech Stack
+## Setup
 
-- **Framework**: Next.js 16 (App Router)
-- **AI**: Vercel AI SDK v6 + Dify SSE streaming
-- **Database**: PostgreSQL via Drizzle ORM (Neon Serverless)
-- **Auth**: NextAuth.js v5 beta
-- **Storage**: Vercel Blob
-- **Cache**: Redis (Upstash or self-hosted)
-- **UI**: shadcn/ui + Tailwind CSS v4
-- **Font**: Plus Jakarta Sans
-- **Brand Colors**: Navy `#030A18`, Cyan `#0E90C8`
-
-## Getting Started
-
-1. Clone the repository
-2. Copy `.env.example` to `.env.local` and fill in the required values
-3. Run `pnpm install`
-4. Run `pnpm db:migrate` to set up the database
-5. Run `pnpm dev` to start the development server
+1. Copy `.env.example` to `.env.local` and fill in your values
+2. Install dependencies: `pnpm install`
+3. Run migrations: `pnpm db:migrate`
+4. Start the dev server: `pnpm dev`
 
 ## Environment Variables
 
 See `.env.example` for all required and optional environment variables.
 
-### Dify Configuration
+## Tech Stack
 
-To use Dify as the AI backend, set:
-```
-DIFY_API_BASE_URL=https://<your-dify-host>/v1
-DIFY_APP_API_KEY=app-xxxxxxxxxxxxxxxx
-```
-
-When these are not set, the app falls back to the Vercel AI Gateway.
-
-## Deployment
-
-Deploy to Vercel with one click:
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/wilmarktorremocha4-stack/ai_agent_operationamz)
+- Next.js 16 (App Router)
+- AI SDK v6
+- Drizzle ORM + PostgreSQL
+- Vercel Blob
+- NextAuth v5
+- shadcn/ui + Tailwind CSS v4

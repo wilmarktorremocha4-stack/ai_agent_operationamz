@@ -1,71 +1,56 @@
 "use server";
 
 import { AuthError } from "next-auth";
-import { z } from "zod";
-import { createGuestUser, getUser } from "@/lib/db/queries";
 import { signIn } from "./auth";
-import { generateDummyPassword } from "@/lib/db/utils";
+import { createUser, getUser } from "@/lib/db/queries";
+import { ChatbotError } from "@/lib/errors";
 
-const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(6),
-});
-
-const registerSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(6),
-});
-
-export async function login(formData: FormData) {
-  const validatedFields = loginSchema.safeParse({
-    email: formData.get("email"),
-    password: formData.get("password"),
-  });
-
-  if (!validatedFields.success) {
-    return { error: "Invalid fields" };
-  }
-
+export async function login(
+  _: unknown,
+  formData: FormData
+): Promise<{ status: string }> {
   try {
     await signIn("credentials", {
-      email: validatedFields.data.email,
-      password: validatedFields.data.password,
+      email: formData.get("email"),
+      password: formData.get("password"),
       redirect: false,
     });
+
+    return { status: "success" };
   } catch (error) {
     if (error instanceof AuthError) {
-      switch (error.type) {
-        case "CredentialsSignin":
-          return { error: "Invalid credentials" };
-        default:
-          return { error: "Something went wrong" };
-      }
+      return { status: "failed" };
     }
     throw error;
   }
 }
 
-export async function register(formData: FormData) {
-  const validatedFields = registerSchema.safeParse({
-    email: formData.get("email"),
-    password: formData.get("password"),
-  });
-
-  if (!validatedFields.success) {
-    return { error: "Invalid fields" };
-  }
-
-  const { email, password } = validatedFields.data;
-
-  const existingUser = await getUser(email);
-  if (existingUser.length > 0) {
-    return { error: "Email already exists" };
-  }
+export async function register(
+  _: unknown,
+  formData: FormData
+): Promise<{ status: string }> {
+  const email = formData.get("email") as string;
+  const password = formData.get("password") as string;
 
   try {
-    await createGuestUser({ email, password });
-    await signIn("credentials", { email, password, redirect: false });
+    const existingUsers = await getUser(email);
+
+    if (existingUsers.length > 0) {
+      return { status: "user_exists" };
+    }
+
+    await createUser(email, password);
+    await signIn("credentials", {
+      email,
+      password,
+      redirect: false,
+    });
+
+    return { status: "success" };
   } catch (error) {
-    return { error: "Failed to create account" };
+    if (error instanceof ChatbotError) {
+      return { status: "failed" };
+    }
+    throw error;
   }
 }

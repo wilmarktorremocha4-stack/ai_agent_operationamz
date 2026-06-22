@@ -1,21 +1,16 @@
 import { redirect } from "next/navigation";
-import { isDevelopmentEnvironment } from "@/lib/constants";
+import { signIn } from "@/app/(auth)/auth";
 import { createGuestUser } from "@/lib/db/queries";
-import { generateDummyPassword } from "@/lib/db/utils";
-import { signIn } from "../../auth";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const redirectUrl = searchParams.get("redirectUrl") || "/";
 
-  const email = `guest-${crypto.randomUUID()}@guest.local`;
-  const password = generateDummyPassword();
-
-  await createGuestUser({ email, password });
+  const [guestUser] = await createGuestUser();
 
   await signIn("credentials", {
-    email,
-    password,
+    email: guestUser.email,
+    password: guestUser.email,
     redirect: false,
   });
 
