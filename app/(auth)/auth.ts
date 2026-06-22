@@ -2,7 +2,7 @@ import NextAuth, { type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { compareSync } from "bcrypt-ts";
 import { authConfig } from "./auth.config";
-import { getUser } from "@/lib/db/queries";
+import { createGuestUser, getUser } from "@/lib/db/queries";
 import { DUMMY_PASSWORD, guestRegex } from "@/lib/constants";
 
 export type UserType = "guest" | "regular";
@@ -25,6 +25,15 @@ export const {
   ...authConfig,
   providers: [
     Credentials({
+      id: "guest",
+      credentials: {},
+      async authorize() {
+        const [guestUser] = await createGuestUser();
+        return { ...guestUser, type: "guest" as UserType };
+      },
+    }),
+    Credentials({
+      id: "credentials",
       credentials: {},
       async authorize({ email, password }: any) {
         const users = await getUser(email as string);
