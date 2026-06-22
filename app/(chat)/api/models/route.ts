@@ -1,4 +1,4 @@
-import { getAllGatewayModels, getCapabilities, chatModels } from "@/lib/ai/models";
+import { getCapabilities, chatModels } from "@/lib/ai/models";
 
 export async function GET() {
   try {
@@ -7,8 +7,8 @@ export async function GET() {
       ...m,
       capabilities: capabilities[m.id] ?? { tools: false, vision: false, reasoning: false },
     }));
-    return Response.json({ models });
+    return Response.json({ models, capabilities });
   } catch {
-    return Response.json({ models: chatModels });
+    return Response.json({ models: chatModels, capabilities: {} });
   }
 }
