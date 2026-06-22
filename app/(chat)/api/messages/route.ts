@@ -1,5 +1,6 @@
 import { auth } from "@/app/(auth)/auth";
 import { getChatById, getMessagesByChatId } from "@/lib/db/queries";
+import { ChatbotError } from "@/lib/errors";
 import { convertToUIMessages } from "@/lib/utils";
 
 export async function GET(request: Request) {
@@ -7,28 +8,32 @@ export async function GET(request: Request) {
   const chatId = searchParams.get("chatId");
 
   if (!chatId) {
-    return Response.json({ error: "Missing chatId" }, { status: 400 });
+    return new ChatbotError("bad_request:api").toResponse();
   }
 
   const session = await auth();
 
   const chat = await getChatById({ id: chatId });
+
   if (!chat) {
-    return Response.json({ error: "Not found" }, { status: 404 });
+    return Response.json({ messages: [], visibility: "private", isReadonly: false });
   }
 
-  const isOwner = session?.user?.id === chat.userId;
-  const isPublic = chat.visibility === "public";
-
-  if (!isOwner && !isPublic) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
+  if (chat.visibility === "private") {
+    if (!session?.user) {
+      return new ChatbotError("unauthorized:chat").toResponse();
+    }
+    if (chat.userId !== session.user.id) {
+      return new ChatbotError("forbidden:chat").toResponse();
+    }
   }
 
   const messages = await getMessagesByChatId({ id: chatId });
+  const isReadonly = chat.userId !== session?.user?.id;
 
   return Response.json({
     messages: convertToUIMessages(messages),
     visibility: chat.visibility,
-    isReadonly: !isOwner,
+    isReadonly,
   });
 }

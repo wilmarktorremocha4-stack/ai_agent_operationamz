@@ -4,50 +4,62 @@ import {
   getDocumentsById,
   saveDocument,
 } from "@/lib/db/queries";
+import { ChatbotError } from "@/lib/errors";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
 
   if (!id) {
-    return Response.json({ error: "Missing id" }, { status: 400 });
+    return new ChatbotError("bad_request:document").toResponse();
   }
 
   const session = await auth();
-  if (!session?.user?.id) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (!session?.user) {
+    return new ChatbotError("unauthorized:document").toResponse();
   }
 
   const documents = await getDocumentsById({ id });
-  const document = documents.at(0);
+
+  const [document] = documents;
+
   if (!document) {
-    return Response.json({ error: "Not found" }, { status: 404 });
+    return new ChatbotError("not_found:document").toResponse();
   }
 
   if (document.userId !== session.user.id) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
+    return new ChatbotError("forbidden:document").toResponse();
   }
 
   return Response.json(documents);
 }
 
 export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get("id");
+
+  if (!id) {
+    return new ChatbotError("bad_request:document").toResponse();
   }
 
-  const { id, title, content, kind } = await request.json();
+  const session = await auth();
 
-  await saveDocument({
+  if (!session?.user?.id) {
+    return new ChatbotError("unauthorized:document").toResponse();
+  }
+
+  const { content, title, kind } = await request.json();
+
+  const document = await saveDocument({
     id,
-    title,
     content,
+    title,
     kind,
     userId: session.user.id,
   });
 
-  return Response.json({ success: true });
+  return Response.json(document);
 }
 
 export async function DELETE(request: Request) {
@@ -56,18 +68,26 @@ export async function DELETE(request: Request) {
   const timestamp = searchParams.get("timestamp");
 
   if (!id || !timestamp) {
-    return Response.json({ error: "Missing params" }, { status: 400 });
+    return new ChatbotError("bad_request:document").toResponse();
   }
 
   const session = await auth();
-  if (!session?.user?.id) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (!session?.user) {
+    return new ChatbotError("unauthorized:document").toResponse();
   }
 
-  await deleteDocumentsByIdAfterTimestamp({
+  const documents = await getDocumentsById({ id });
+  const [document] = documents;
+
+  if (document?.userId !== session.user.id) {
+    return new ChatbotError("forbidden:document").toResponse();
+  }
+
+  const documentsDeleted = await deleteDocumentsByIdAfterTimestamp({
     id,
     timestamp: new Date(timestamp),
   });
 
-  return Response.json({ success: true });
+  return Response.json(documentsDeleted);
 }

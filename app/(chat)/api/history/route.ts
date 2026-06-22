@@ -1,37 +1,44 @@
 import { auth } from "@/app/(auth)/auth";
-import {
-  getChatsByUserId,
-  deleteChatsByUserId,
-} from "@/lib/db/queries";
+import { deleteAllChatsByUserId, getChatsByUserId } from "@/lib/db/queries";
+import { ChatbotError } from "@/lib/errors";
 
 export async function GET(request: Request) {
   const session = await auth();
-  if (!session?.user?.id) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (!session?.user) {
+    return new ChatbotError("unauthorized:auth").toResponse();
   }
 
   const { searchParams } = new URL(request.url);
-  const limit = Number(searchParams.get("limit") ?? 10);
-  const startingAfter = searchParams.get("starting_after") ?? undefined;
-  const endingBefore = searchParams.get("ending_before") ?? undefined;
+  const limit = Number.parseInt(searchParams.get("limit") ?? "10");
+  const startingAfter = searchParams.get("starting_after");
+  const endingBefore = searchParams.get("ending_before");
 
-  const chats = await getChatsByUserId({
-    id: session.user.id,
-    limit,
-    startingAfter,
-    endingBefore,
-  });
+  try {
+    const result = await getChatsByUserId({
+      id: session.user.id,
+      limit,
+      startingAfter,
+      endingBefore,
+    });
 
-  return Response.json(chats);
+    return Response.json(result);
+  } catch (_error) {
+    return new ChatbotError("bad_request:history").toResponse();
+  }
 }
 
 export async function DELETE() {
   const session = await auth();
-  if (!session?.user?.id) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (!session?.user) {
+    return new ChatbotError("unauthorized:auth").toResponse();
   }
 
-  await deleteChatsByUserId({ id: session.user.id });
-
-  return Response.json({ success: true });
+  try {
+    const result = await deleteAllChatsByUserId({ userId: session.user.id });
+    return Response.json(result);
+  } catch (_error) {
+    return new ChatbotError("bad_request:history").toResponse();
+  }
 }

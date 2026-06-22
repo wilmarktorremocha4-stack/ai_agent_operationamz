@@ -1,15 +1,21 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { auth } from "@/app/(auth)/auth";
 import {
   deleteMessagesByChatIdAfterTimestamp,
+  getChatById,
   getMessageById,
-  updateChatVisiblityById,
+  saveChat,
+  updateChatTitleById,
+  updateChatVisibilityById,
 } from "@/lib/db/queries";
 import type { VisibilityType } from "@/components/chat/visibility-selector";
+import { generateTitleFromUserMessage } from "@/app/(chat)/api/chat/schema";
 
 export async function saveChatModelAsCookie(model: string) {
-  // handled client-side via cookie
+  const cookieStore = await cookies();
+  cookieStore.set("chat-model", model);
 }
 
 export async function generateTitleFromUserMessage({
@@ -17,25 +23,27 @@ export async function generateTitleFromUserMessage({
 }: {
   message: string;
 }) {
-  const { generateText } = await import("ai");
+  // Import here to avoid circular dependency issues
+  const { streamText } = await import("ai");
   const { getTitleModel } = await import("@/lib/ai/providers");
-  const { titleSystemPrompt } = await import("@/lib/ai/prompts");
+  const { titlePrompt } = await import("@/lib/ai/prompts");
 
-  const { text: title } = await generateText({
+  const { textStream } = streamText({
     model: getTitleModel(),
-    system: titleSystemPrompt,
+    system: titlePrompt,
     prompt: message,
   });
 
-  return title;
+  let title = "";
+  for await (const chunk of textStream) {
+    title += chunk;
+  }
+
+  return title.trim() || "New Chat";
 }
 
 export async function deleteTrailingMessages({ id }: { id: string }) {
-  const session = await auth();
-  if (!session?.user?.id) return;
-
   const [message] = await getMessageById({ id });
-  if (message.role !== "user") return;
 
   await deleteMessagesByChatIdAfterTimestamp({
     chatId: message.chatId,
@@ -50,7 +58,5 @@ export async function updateChatVisibility({
   chatId: string;
   visibility: VisibilityType;
 }) {
-  const session = await auth();
-  if (!session?.user?.id) return;
-  await updateChatVisiblityById({ chatId, visibility });
+  await updateChatVisibilityById({ chatId, visibility });
 }

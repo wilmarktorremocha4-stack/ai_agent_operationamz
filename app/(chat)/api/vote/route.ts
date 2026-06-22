@@ -1,17 +1,29 @@
 import { auth } from "@/app/(auth)/auth";
-import { getVotesByChatId, voteMessage } from "@/lib/db/queries";
+import { getChatById, getVotesByChatId, voteMessage } from "@/lib/db/queries";
+import { ChatbotError } from "@/lib/errors";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const chatId = searchParams.get("chatId");
 
   if (!chatId) {
-    return Response.json({ error: "Missing chatId" }, { status: 400 });
+    return new ChatbotError("bad_request:vote").toResponse();
   }
 
   const session = await auth();
-  if (!session?.user?.id) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (!session?.user) {
+    return new ChatbotError("unauthorized:auth").toResponse();
+  }
+
+  const chat = await getChatById({ id: chatId });
+
+  if (!chat) {
+    return new ChatbotError("not_found:chat").toResponse();
+  }
+
+  if (chat.userId !== session.user.id) {
+    return new ChatbotError("forbidden:chat").toResponse();
   }
 
   const votes = await getVotesByChatId({ id: chatId });
@@ -19,11 +31,17 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const { chatId, messageId, type } = await request.json();
+  const { chatId, messageId, type }: { chatId: string; messageId: string; type: "up" | "down" } =
+    await request.json();
+
+  if (!chatId || !messageId || !type) {
+    return new ChatbotError("bad_request:vote").toResponse();
+  }
 
   const session = await auth();
-  if (!session?.user?.id) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (!session?.user) {
+    return new ChatbotError("unauthorized:auth").toResponse();
   }
 
   await voteMessage({ chatId, messageId, type });

@@ -1,20 +1,22 @@
 import { put } from "@vercel/blob";
 import { auth } from "@/app/(auth)/auth";
+import { ChatbotError } from "@/lib/errors";
 
 export async function POST(request: Request) {
   const session = await auth();
-  if (!session?.user?.id) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (!session?.user) {
+    return new ChatbotError("unauthorized:auth").toResponse();
   }
 
-  const formData = await request.formData();
-  const file = formData.get("file") as File;
+  const { searchParams } = new URL(request.url);
+  const filename = searchParams.get("filename");
 
-  if (!file) {
-    return Response.json({ error: "No file provided" }, { status: 400 });
+  if (!filename) {
+    return new ChatbotError("bad_request:api").toResponse();
   }
 
-  const blob = await put(file.name, file, {
+  const blob = await put(filename, request.body as ReadableStream, {
     access: "public",
   });
 

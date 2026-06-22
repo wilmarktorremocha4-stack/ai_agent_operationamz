@@ -1,11 +1,13 @@
-import { auth } from "@/app/(auth)/auth";
-import { ActiveChatProvider } from "@/hooks/use-active-chat";
-import { DataStreamProvider } from "@/components/chat/data-stream-provider";
-import { AppSidebar } from "@/components/chat/app-sidebar";
-import { SidebarProvider } from "@/components/ui/sidebar";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { cookies } from "next/headers";
-import { ChatShell } from "@/components/chat/shell";
+import { auth } from "@/app/(auth)/auth";
+import { AppSidebar } from "@/components/chat/app-sidebar";
+import { DataStreamProvider } from "@/components/chat/data-stream-provider";
+import { ActiveChatProvider } from "@/hooks/use-active-chat";
+import {
+  SidebarInset,
+  SidebarProvider,
+} from "@/components/ui/sidebar";
+import { Toaster } from "sonner";
 
 export default async function ChatLayout({
   children,
@@ -14,18 +16,19 @@ export default async function ChatLayout({
 }) {
   const session = await auth();
   const cookieStore = await cookies();
-  const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false";
+  const isCollapsed = cookieStore.get("sidebar_state")?.value === "false";
 
   return (
-    <TooltipProvider>
-      <SidebarProvider defaultOpen={defaultOpen}>
-        <DataStreamProvider>
-          <ActiveChatProvider>
-            <AppSidebar user={session?.user} />
-            <ChatShell>{children}</ChatShell>
-          </ActiveChatProvider>
-        </DataStreamProvider>
-      </SidebarProvider>
-    </TooltipProvider>
+    <SidebarProvider defaultOpen={!isCollapsed}>
+      <DataStreamProvider>
+        <ActiveChatProvider>
+          <AppSidebar user={session?.user} />
+          <SidebarInset>
+            {children}
+          </SidebarInset>
+          <Toaster position="top-center" richColors />
+        </ActiveChatProvider>
+      </DataStreamProvider>
+    </SidebarProvider>
   );
 }
