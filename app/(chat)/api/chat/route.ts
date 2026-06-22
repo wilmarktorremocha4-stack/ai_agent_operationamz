@@ -185,6 +185,8 @@ export async function POST(request: Request) {
       });
 
       if (!difyResponse.ok) {
+        const errBody = await difyResponse.text().catch(() => "");
+        console.error("Dify API error", difyResponse.status, errBody);
         return new ChatbotError("bad_request:chat").toResponse();
       }
 
@@ -206,6 +208,11 @@ export async function POST(request: Request) {
     }
 
     // ── AI SDK path ────────────────────────────────────────────────────────────
+    // If Dify isn't configured, we have no valid AI backend — tell the user.
+    if (chatModel === "dify") {
+      return new ChatbotError("offline:chat").toResponse();
+    }
+
     const { longitude, latitude, city, country } = geolocation(request);
 
     const modelMessages = await convertToModelMessages(uiMessages);
